@@ -18,11 +18,32 @@ import java.util.Map;
 public final class core extends JavaPlugin {
 
     public static core plugin;
+    public static String redisHost;
+    public static String redisCrossServerHostName;
+    public static int redisPort;
+    public static String redisPass;
 
     public static core getPlugin() {
         return plugin;
     }
     public static ArrayList<Thread> threads = new ArrayList<>();
+    private final HashMap<Integer,Integer> dataLottery = new HashMap<>();
+
+    public static String getRedisCrossServerHostName() {
+        return redisCrossServerHostName;
+    }
+
+    public static String getRedisHost() {
+        return redisHost;
+    }
+
+    public static String getRedisPass() {
+        return redisPass;
+    }
+
+    public static int getRedisPort() {
+        return redisPort;
+    }
 
     @Override
     public void onEnable() {
@@ -45,14 +66,11 @@ public final class core extends JavaPlugin {
     }
 
     private void subscribeToChannelAsync(String channelName) {
-        String redisHost = config.customConfig.getString("redis.host");
-        int redisPort = config.customConfig.getInt("redis.port");
-        String password = config.customConfig.getString("redis.password");
 
         Thread thread = new Thread(() -> {
-            try (Jedis jedis = new Jedis(redisHost, redisPort)) {
-                if(!password.isEmpty()) {
-                    jedis.auth(password);
+            try (Jedis jedis = new Jedis(getRedisHost(), getRedisPort())) {
+                if(!getRedisPass().isEmpty()) {
+                    jedis.auth(getRedisPass());
                 }
                 JedisPubSub jedisPubSub = new JedisPubSub() {
                     @Override
@@ -63,7 +81,7 @@ public final class core extends JavaPlugin {
                         Bukkit.getConsoleSender().sendMessage("XSCasinoRedis Received data from ---> " + channel);
                         for(String server : config.customConfig.getStringList("cross-server.servers")) {
                             if(channel.equalsIgnoreCase("XSCasinoRedisData/XSLottery/" + config.customConfig.getString("redis.host-server") + "/" + server)) {
-                                Bukkit.getConsoleSender().sendMessage("XSCasino Received Data...");
+                                Bukkit.getConsoleSender().sendMessage("XSCasinoRedis Received Data... -->" + message);
                                 convertToObject(message);
                             }
                         }
@@ -79,36 +97,63 @@ public final class core extends JavaPlugin {
         threads.add(thread);
     }
 
+    public static void sendDataToXSCasinoClient(String CHName,HashMap<Integer,Integer> lotteryList) {
+        Gson gson = new Gson();
+        String jsonString = gson.toJson(lotteryList);
+        sendMessageToRedisAsync(CHName,jsonString);
+        Bukkit.broadcastMessage("XSCasinoRedis Send.... From " + CHName);
+    }
+
+    public static void sendMessageToRedisAsync(String CHName, String message) {
+
+        new Thread(() -> {
+            try (Jedis jedis = new Jedis(getRedisHost(), getRedisPort())) {
+                if(!getRedisPass().isEmpty()) {
+                    jedis.auth(getRedisPass());
+                }
+                jedis.publish(CHName, message);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }).start();
+    }
+
     private void convertToObject(String json) {
 
-        Bukkit.broadcastMessage("JSON: " + json);
         if (json.isEmpty()) {
             return;
         }
-
 
         GsonBuilder gsonBuilder = new GsonBuilder();
         gsonBuilder.registerTypeAdapter(new TypeToken<HashMap<Integer, Integer>>() {}.getType(), new HashMapDeserializer());
         Gson gson = gsonBuilder.create();
 
-        // แปลง JSON เป็น HashMap<Integer, Integer>
         HashMap<Integer, Integer> hashMap = gson.fromJson(json, new TypeToken<HashMap<Integer, Integer>>() {}.getType());
 
         for(Map.Entry<Integer,Integer> map : hashMap.entrySet()) {
             Bukkit.getConsoleSender().sendMessage(map.getKey() + " : " + map.getValue());
+
+            if(dataLottery.containsKey(map.getKey())) {
+                dataLottery.replace(map.getKey(), map.getValue()+dataLottery.get(map.getKey()));
+            } else {
+                dataLottery.put(map.getKey(),map.getValue());
+            }
         }
+
+        sendDataToXSCasinoClient("XSCasinoRedisData/XSLottery/Update/"+getRedisCrossServerHostName(),dataLottery);
 
     }
 
     private boolean redisConnection() {
-        String redisHost = config.customConfig.getString("redis.host");
-        int redisPort = config.customConfig.getInt("redis.port");
-        String password = config.customConfig.getString("redis.password");
+        redisHost = config.customConfig.getString("redis.host");
+        redisPort = config.customConfig.getInt("redis.port");
+        redisPass = config.customConfig.getString("redis.password");
+        redisCrossServerHostName = config.customConfig.getString("redis.host-server");
 
         try {
-            Jedis jedis = new Jedis(redisHost, redisPort);
-            if(!password.isEmpty()) {
-                jedis.auth(password);
+            Jedis jedis = new Jedis(getRedisHost(), getRedisPort());
+            if(!getRedisPass().isEmpty()) {
+                jedis.auth(getRedisPass());
             }
             jedis.close();
             Bukkit.getConsoleSender().sendMessage("§x§E§7§F§F§0§0[XSCASINO REDIS] Redis Server : §x§6§0§F§F§0§0Connected");
