@@ -1,0 +1,11 @@
+
+redis:
+  host: localhost
+  port: 6379
+  password: ''
+  host-server: "SyncHost/01" #name of this server host
+
+cross-server:
+  servers:
+    - "Sync/01"
+    - "Sync/02"
