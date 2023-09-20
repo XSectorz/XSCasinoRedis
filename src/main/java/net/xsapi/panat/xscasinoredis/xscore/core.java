@@ -6,6 +6,7 @@ import com.google.gson.reflect.TypeToken;
 import net.xsapi.panat.xscasinoredis.api.HashMapDeserializer;
 import net.xsapi.panat.xscasinoredis.configuration.config;
 import net.xsapi.panat.xscasinoredis.configuration.configLoader;
+import net.xsapi.panat.xscasinoredis.models.XSLottery;
 import org.bukkit.Bukkit;
 import org.bukkit.plugin.java.JavaPlugin;
 import redis.clients.jedis.Jedis;
@@ -27,7 +28,6 @@ public final class core extends JavaPlugin {
         return plugin;
     }
     public static ArrayList<Thread> threads = new ArrayList<>();
-    private final HashMap<Integer,Integer> dataLottery = new HashMap<>();
 
     public static String getRedisCrossServerHostName() {
         return redisCrossServerHostName;
@@ -54,8 +54,14 @@ public final class core extends JavaPlugin {
         if(redisConnection()) {
             for(String server : config.customConfig.getStringList("cross-server.servers")) {
                 subscribeToChannelAsync("XSCasinoRedisData/XSLottery/" + config.customConfig.getString("redis.host-server") + "/" + server);
+                subscribeToChannelAsync("XSCasinoRedisData/XSLottery/Change/" + config.customConfig.getString("redis.host-server") + "/" + server);
+                subscribeToChannelAsync("XSCasinoRedisData/XSLottery/WinnerList/" + config.customConfig.getString("redis.host-server") + "/" + server);
             }
         }
+
+        XSHandlers.setUpConfig();
+        XSHandlers.createTask();
+
     }
 
     @Override
@@ -63,6 +69,7 @@ public final class core extends JavaPlugin {
         for(Thread thread : threads) {
             thread.interrupt();
         }
+        XSHandlers.saveData();
     }
 
     private void subscribeToChannelAsync(String channelName) {
@@ -78,11 +85,19 @@ public final class core extends JavaPlugin {
                         if (Thread.currentThread().isInterrupted()) {
                             return;
                         }
-                        Bukkit.getConsoleSender().sendMessage("XSCasinoRedis Received data from ---> " + channel);
+                        Bukkit.getConsoleSender().sendMessage("Received data (send from serverRedis)" + channel + " -->" + message);
                         for(String server : config.customConfig.getStringList("cross-server.servers")) {
                             if(channel.equalsIgnoreCase("XSCasinoRedisData/XSLottery/" + config.customConfig.getString("redis.host-server") + "/" + server)) {
-                                Bukkit.getConsoleSender().sendMessage("XSCasinoRedis Received Data... -->" + message);
                                 convertToObject(message);
+                            } else if(channel.equalsIgnoreCase("XSCasinoRedisData/XSLottery/Change/" + config.customConfig.getString("redis.host-server") + "/" + server)) {
+                                /*
+                                    @Change format {type}:{value}
+                                    {type}
+                                        - LockPrize
+                                */
+                                changeConvert(message);
+                            } else if(channel.equalsIgnoreCase("XSCasinoRedisData/XSLottery/WinnerList/" + config.customConfig.getString("redis.host-server") + "/" + server)) {
+                                winnerListConvert(message);
                             }
                         }
                     }
@@ -97,11 +112,30 @@ public final class core extends JavaPlugin {
         threads.add(thread);
     }
 
-    public static void sendDataToXSCasinoClient(String CHName,HashMap<Integer,Integer> lotteryList) {
+    public static void winnerListConvert(String message) {
         Gson gson = new Gson();
-        String jsonString = gson.toJson(lotteryList);
-        sendMessageToRedisAsync(CHName,jsonString);
-        Bukkit.broadcastMessage("XSCasinoRedis Send.... From " + CHName);
+        HashMap<String, Integer> resultMap = gson.fromJson(message, new TypeToken<HashMap<String, Integer>>(){}.getType());
+        XSHandlers.getXsLottery().getDataLottery().putAll(resultMap);
+        for(Map.Entry<String,Integer> winner : resultMap.entrySet()) {
+            Bukkit.broadcastMessage(winner.getKey() + " ---> " + winner.getValue());
+        }
+    }
+
+    public static void changeConvert(String msg) {
+        String type = msg.split(":")[0];
+
+        if(type.equalsIgnoreCase("LockPrize")) {
+            int prizeNum = Integer.parseInt(msg.split(":")[1]);
+            String setterName = (msg.split(":")[2]);
+            XSHandlers.getXsLottery().setLockPrize(prizeNum);
+            XSHandlers.getXsLottery().setSetterLockPrize(setterName);
+            Bukkit.getConsoleSender().sendMessage("Update LockPrize (send from redis server): " + setterName + " with " + prizeNum);
+        }
+    }
+
+    public static void sendDataToXSCasinoClient(String CHName,String lotteryData) {
+        sendMessageToRedisAsync(CHName,lotteryData);
+        //Bukkit.broadcastMessage("XSCasinoRedis Send.... From " + CHName);
     }
 
     public static void sendMessageToRedisAsync(String CHName, String message) {
@@ -118,29 +152,16 @@ public final class core extends JavaPlugin {
         }).start();
     }
 
-    private void convertToObject(String json) {
+    private void convertToObject(String data) {
 
-        if (json.isEmpty()) {
+        if (data.isEmpty()) {
             return;
         }
 
-        GsonBuilder gsonBuilder = new GsonBuilder();
-        gsonBuilder.registerTypeAdapter(new TypeToken<HashMap<Integer, Integer>>() {}.getType(), new HashMapDeserializer());
-        Gson gson = gsonBuilder.create();
+        int ticketNumber = Integer.parseInt(data.split(":")[0]);
+        int ticketAmount = Integer.parseInt(data.split(":")[1]);
 
-        HashMap<Integer, Integer> hashMap = gson.fromJson(json, new TypeToken<HashMap<Integer, Integer>>() {}.getType());
-
-        for(Map.Entry<Integer,Integer> map : hashMap.entrySet()) {
-            Bukkit.getConsoleSender().sendMessage(map.getKey() + " : " + map.getValue());
-
-            if(dataLottery.containsKey(map.getKey())) {
-                dataLottery.replace(map.getKey(), map.getValue()+dataLottery.get(map.getKey()));
-            } else {
-                dataLottery.put(map.getKey(),map.getValue());
-            }
-        }
-
-        sendDataToXSCasinoClient("XSCasinoRedisData/XSLottery/Update/"+getRedisCrossServerHostName(),dataLottery);
+        sendDataToXSCasinoClient("XSCasinoRedisData/XSLottery/Update/"+getRedisCrossServerHostName(),ticketNumber + ":" + ticketAmount);
 
     }
 

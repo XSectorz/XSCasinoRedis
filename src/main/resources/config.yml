@@ -5,6 +5,12 @@ redis:
   password: ''
   host-server: "SyncHost/01" #name of this server host
 
+config:
+  prizeTime: "20:00" #real time
+  prizeMillis: 0 #do not change this
+  lockPrize: -1
+  lockPrizeSetter: ""
+
 cross-server:
   servers:
     - "Sync/01"
