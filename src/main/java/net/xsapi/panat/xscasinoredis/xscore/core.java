@@ -56,6 +56,7 @@ public final class core extends JavaPlugin {
                 subscribeToChannelAsync("XSCasinoRedisData/XSLottery/" + config.customConfig.getString("redis.host-server") + "/" + server);
                 subscribeToChannelAsync("XSCasinoRedisData/XSLottery/Change/" + config.customConfig.getString("redis.host-server") + "/" + server);
                 subscribeToChannelAsync("XSCasinoRedisData/XSLottery/WinnerList/" + config.customConfig.getString("redis.host-server") + "/" + server);
+                subscribeToChannelAsync("XSCasinoRedisData/XSLottery/Requests/" + config.customConfig.getString("redis.host-server") + "/" + server);
             }
         }
 
@@ -98,6 +99,8 @@ public final class core extends JavaPlugin {
                                 changeConvert(message);
                             } else if(channel.equalsIgnoreCase("XSCasinoRedisData/XSLottery/WinnerList/" + config.customConfig.getString("redis.host-server") + "/" + server)) {
                                 winnerListConvert(message);
+                            } else if(channel.equalsIgnoreCase("XSCasinoRedisData/XSLottery/Requests/" + config.customConfig.getString("redis.host-server") + "/" + server)) {
+                                sendCurrentDataToRequests(message);
                             }
                         }
                     }
@@ -110,6 +113,13 @@ public final class core extends JavaPlugin {
         });
         thread.start();
         threads.add(thread);
+    }
+
+    public static void sendCurrentDataToRequests(String message) {
+        Gson gson = new Gson();
+        String json = gson.toJson(XSHandlers.getXsLottery().getLotteryList());
+        sendDataToXSCasinoClient("XSCasinoRedisData/XSLottery/RequestsReturn/"+getRedisCrossServerHostName()+"/"+message,json);
+
     }
 
     public static void winnerListConvert(String message) {
@@ -160,6 +170,13 @@ public final class core extends JavaPlugin {
 
         int ticketNumber = Integer.parseInt(data.split(":")[0]);
         int ticketAmount = Integer.parseInt(data.split(":")[1]);
+
+        if(XSHandlers.getXsLottery().getLotteryList().containsKey(ticketNumber)) {
+            XSHandlers.getXsLottery().getLotteryList().replace(ticketNumber,
+                    XSHandlers.getXsLottery().getLotteryList().get(ticketNumber)+ticketAmount);
+        } else {
+            XSHandlers.getXsLottery().getLotteryList().put(ticketNumber,ticketAmount);
+        }
 
         sendDataToXSCasinoClient("XSCasinoRedisData/XSLottery/Update/"+getRedisCrossServerHostName(),ticketNumber + ":" + ticketAmount);
 
