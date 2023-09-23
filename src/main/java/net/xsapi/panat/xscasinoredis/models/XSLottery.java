@@ -13,9 +13,50 @@ public class XSLottery {
 
     private int lockPrize = -1;
     private String setterLockPrize = "";
+    private long potPrize;
+    private long potExtra;
+    private String winnerName = "";
     private HashMap<String,Integer> dataLottery = new HashMap<>();
     private HashMap<Integer,Integer> lotteryList = new HashMap<>();
+    private int amountTicket = 0;
     private static long nextPrizeTime = 0L;
+    private String prizeString;
+
+    public String getPrizeString() {
+        return prizeString;
+    }
+
+    public void setPrizeString(String prizeString) {
+        this.prizeString = prizeString;
+    }
+
+    public int getAmountTicket() {
+        return amountTicket;
+    }
+
+    public void setAmountTicket(int amountTicket) {
+        this.amountTicket = amountTicket;
+    }
+
+    public void addTicket(int amount) {
+        this.amountTicket += amount;
+    }
+
+    public String getWinnerName() {
+        return winnerName;
+    }
+
+    public void setWinnerName(String winnerName) {
+        this.winnerName = winnerName;
+    }
+
+    public void setPotPrize(long potPrize) {
+        this.potPrize = potPrize;
+    }
+
+    public long getPotPrize() {
+        return potPrize;
+    }
 
     public HashMap<Integer, Integer> getLotteryList() {
         return lotteryList;
@@ -49,10 +90,20 @@ public class XSLottery {
         this.lockPrize = lockPrize;
     }
 
+    public void setPotExtra(long potExtra) {
+        this.potExtra = potExtra;
+    }
+
+    public long getPotExtra() {
+        return potExtra;
+    }
+
     public XSLottery() {
         setLockPrize(config.customConfig.getInt("config.lockPrize"));
         setSetterLockPrize(config.customConfig.getString("config.lockPrizeSetter"));
-
+        setPotPrize(config.customConfig.getLong("config.potPrize"));
+        setPotExtra(config.customConfig.getLong("config.potExtra"));
+        setPrizeString(config.customConfig.getString("config.prizeTime"));
         loadDataSQL(XSHandlers.getJDBC_URL(),XSHandlers.getUSER(),XSHandlers.getPASS());
     }
 
@@ -68,7 +119,8 @@ public class XSLottery {
 
             if (resultSet.next()) {
                 String lotteryListData = resultSet.getString("lotteryList");
-                long prizeTime = resultSet.getLong("NextPrizeTime");
+                //long prizeTime = resultSet.getLong("NextPrizeTime");
+                int amtTicket = 0;
                 if(!lotteryListData.equalsIgnoreCase("[]")) {
                     lotteryListData = lotteryListData.replaceAll("\\[|\\]", "");
                     String[] dataArray = lotteryListData.split(",");
@@ -78,9 +130,13 @@ public class XSLottery {
                         int key = Integer.parseInt(lottery.trim().split(":")[0]);
                         int amount = Integer.parseInt(lottery.trim().split(":")[1]);
                         lotteryList.put(key,amount);
+                        amtTicket += amount;
                     }
                 }
-                setNextPrizeTime(prizeTime);
+                setAmountTicket(amtTicket);
+                //setNextPrizeTime(prizeTime);
+                setNextPrizeTime(XSHandlers.calculateTimeRedis(getPrizeString()) + System.currentTimeMillis());
+                //Bukkit.broadcastMessage("Next Time: " + XSHandlers.calculateTimeRedis(getPrizeString()) + System.currentTimeMillis());
 
                 Bukkit.getConsoleSender().sendMessage("§x§E§7§F§F§0§0[XSCasinoRedis] Lottery loaded data from database successfully");
             }
@@ -102,6 +158,8 @@ public class XSLottery {
         } else {
             prizeNum = getLockPrize();
         }
+        setLockPrize(-1);
+        setSetterLockPrize("");
 
         core.sendMessageToRedisAsync("XSCasinoRedisData/XSLottery/EndPrizeNumber/"+core.getRedisCrossServerHostName(),"" + prizeNum);
 
@@ -120,14 +178,62 @@ public class XSLottery {
         Gson gson = new Gson();
         String json = gson.toJson(dataLottery);
 
-        core.sendMessageToRedisAsync("XSCasinoRedisData/XSLottery/EndSendWinnerList/"+core.getRedisCrossServerHostName(),json);
+        int amountTicket = 0;
+        for(Map.Entry<String,Integer> data : dataLottery.entrySet()) {
+            amountTicket += data.getValue();
+        }
+        Bukkit.broadcastMessage("Winticket: " + amountTicket);
+        int maxWinTicket = 0;
+
+        Bukkit.broadcastMessage("Amt Ticket-> " + getAmountTicket());
+        Bukkit.broadcastMessage("Pot Extra-> " + getPotExtra());
+
+        setPotPrize(getPotPrize() + (getAmountTicket()*getPotExtra()));
+        Bukkit.broadcastMessage("Pot Prize: " + getPotPrize());
+        Bukkit.broadcastMessage("Winner String " + dataLottery);
+
+        for (Map.Entry<String,Integer> winner : dataLottery.entrySet()) {
+            double prizePool = (double) winner.getValue() / amountTicket;
+            double reward = (getPotPrize() * prizePool);
+            XSHandlers.getEconomy().depositPlayer(Bukkit.getPlayer(winner.getKey()),reward);
+
+            if(winner.getValue() > maxWinTicket) {
+                maxWinTicket = winner.getValue();
+                setWinnerName(winner.getKey());
+            }
+        }
+
+        core.sendMessageToRedisAsync("XSCasinoRedisData/XSLottery/EndSendWinnerList/"+core.getRedisCrossServerHostName()
+                ,json+"XSCASINO_ESCAPE_PREFIX"+getWinnerName()+"XSCASINO_ESCAPE_PREFIX"+amountTicket);
         clearData();
     }
 
     public void clearData() {
         dataLottery.clear();
         lotteryList.clear();
+        setAmountTicket(0);
+        setPotPrize(config.customConfig.getLong("config.potPrize"));
         saveTOSQL(XSHandlers.getJDBC_URL(),XSHandlers.getUSER(),XSHandlers.getPASS());
+        resetPlayerData(XSHandlers.getJDBC_URL(),XSHandlers.getUSER(),XSHandlers.getPASS());
+    }
+
+    public void resetPlayerData(String JDBC_URL,String USER,String PASS) {
+        try {
+            Connection connection = DriverManager.getConnection(JDBC_URL, USER, PASS);
+
+            String updateQuery = "UPDATE " + XSHandlers.getTableXSPlayer() + " SET lotteryList = ?";
+            PreparedStatement preparedStatement = connection.prepareStatement(updateQuery);
+            preparedStatement.setString(1, "[]");
+            preparedStatement.executeUpdate();
+
+            preparedStatement.close();
+            connection.close();
+
+            Bukkit.getConsoleSender().sendMessage("§x§E§7§F§F§0§0[XSAPI Casino] Lottery Database : §x§6§0§F§F§0§0Reset!");
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
     }
 
     public void saveTOSQL(String JDBC_URL,String USER,String PASS) {

@@ -57,9 +57,12 @@ public final class core extends JavaPlugin {
                 subscribeToChannelAsync("XSCasinoRedisData/XSLottery/Change/" + config.customConfig.getString("redis.host-server") + "/" + server);
                 subscribeToChannelAsync("XSCasinoRedisData/XSLottery/WinnerList/" + config.customConfig.getString("redis.host-server") + "/" + server);
                 subscribeToChannelAsync("XSCasinoRedisData/XSLottery/Requests/" + config.customConfig.getString("redis.host-server") + "/" + server);
+                subscribeToChannelAsync("XSCasinoRedisData/XSLottery/CheckStatus/" + config.customConfig.getString("redis.host-server") + "/" + server);
+                checkStatus(server,"true");
             }
         }
 
+        XSHandlers.setupAPI();
         XSHandlers.setUpConfig();
         XSHandlers.createTask();
 
@@ -67,6 +70,9 @@ public final class core extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        for(String server : config.customConfig.getStringList("cross-server.servers")) {
+            checkStatus(server,"false");
+        }
         for(Thread thread : threads) {
             thread.interrupt();
         }
@@ -101,18 +107,25 @@ public final class core extends JavaPlugin {
                                 winnerListConvert(message);
                             } else if(channel.equalsIgnoreCase("XSCasinoRedisData/XSLottery/Requests/" + config.customConfig.getString("redis.host-server") + "/" + server)) {
                                 sendCurrentDataToRequests(message);
+                            } else if(channel.equalsIgnoreCase("XSCasinoRedisData/XSLottery/CheckStatus/" + config.customConfig.getString("redis.host-server") + "/" + server)) {
+                                checkStatus(message,"true");
                             }
                         }
                     }
                 };
                 jedis.subscribe(jedisPubSub, channelName);
             } catch (Exception e) {
-                // จัดการข้อผิดพลาดที่เกิดขึ้น
+                // จัดการข้อผิดพลาดที่เกิดขึ้นwd
                 e.printStackTrace();
             }
         });
         thread.start();
         threads.add(thread);
+    }
+
+    public static void checkStatus(String message,String status) {
+        Bukkit.getConsoleSender().sendMessage("set status to " + message + " as " + status);
+        sendMessageToRedisAsync("XSCasinoRedisData/XSLottery/ResponseStatus/"+getRedisCrossServerHostName()+"/"+message,status);
     }
 
     public static void sendCurrentDataToRequests(String message) {
@@ -126,6 +139,18 @@ public final class core extends JavaPlugin {
         Gson gson = new Gson();
         HashMap<String, Integer> resultMap = gson.fromJson(message, new TypeToken<HashMap<String, Integer>>(){}.getType());
         XSHandlers.getXsLottery().getDataLottery().putAll(resultMap);
+
+        for(Map.Entry<String,Integer> user : resultMap.entrySet()) {
+            if(XSHandlers.getXsLottery().getDataLottery().containsKey(user.getKey())) {
+                if(XSHandlers.getXsLottery().getDataLottery().get(user.getKey())
+                < user.getValue()) {
+                    XSHandlers.getXsLottery().getDataLottery().replace(user.getKey(),user.getValue());
+                }
+            } else {
+                XSHandlers.getXsLottery().getDataLottery().put(user.getKey(),user.getValue());
+            }
+        }
+
         for(Map.Entry<String,Integer> winner : resultMap.entrySet()) {
             Bukkit.broadcastMessage(winner.getKey() + " ---> " + winner.getValue());
         }
@@ -177,6 +202,7 @@ public final class core extends JavaPlugin {
         } else {
             XSHandlers.getXsLottery().getLotteryList().put(ticketNumber,ticketAmount);
         }
+        XSHandlers.getXsLottery().addTicket(ticketAmount);
 
         sendDataToXSCasinoClient("XSCasinoRedisData/XSLottery/Update/"+getRedisCrossServerHostName(),ticketNumber + ":" + ticketAmount);
 
