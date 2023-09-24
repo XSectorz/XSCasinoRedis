@@ -124,7 +124,7 @@ public final class core extends JavaPlugin {
     }
 
     public static void checkStatus(String message,String status) {
-        Bukkit.getConsoleSender().sendMessage("set status to " + message + " as " + status);
+       // Bukkit.getConsoleSender().sendMessage("set status to " + message + " as " + status);
         sendMessageToRedisAsync("XSCasinoRedisData/XSLottery/ResponseStatus/"+getRedisCrossServerHostName()+"/"+message,status);
     }
 

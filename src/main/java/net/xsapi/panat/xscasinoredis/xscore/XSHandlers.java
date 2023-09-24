@@ -1,5 +1,6 @@
 package net.xsapi.panat.xscasinoredis.xscore;
 
+import dev.unnm3d.rediseconomy.api.RedisEconomyAPI;
 import net.milkbowl.vault.economy.Economy;
 import net.milkbowl.vault.permission.Permission;
 import net.xsapi.panat.xscasinoredis.configuration.config;
@@ -28,6 +29,9 @@ public class XSHandlers {
     private static Economy econ = null;
     private static Permission perms = null;
 
+    //Redis Economy API
+    private static RedisEconomyAPI redisEconomyAPI = null;
+
     public static boolean getUsingSQL() { return usingSQL; }
     public static String getJDBC_URL() {
         return JDBC_URL;
@@ -46,6 +50,10 @@ public class XSHandlers {
     }
     public static String getTableXSPlayer() {
         return TABLE_XSPLAYER;
+    }
+
+    public static RedisEconomyAPI getRedisEconomyAPI() {
+        return redisEconomyAPI;
     }
 
     public static void setUpConfig() {
@@ -76,6 +84,17 @@ public class XSHandlers {
             perms = rspPermission.getProvider();
             Bukkit.getConsoleSender().sendMessage("§x§f§f§a§c§2§f[XSCASINO REDIS] Vault : §x§2§F§C§0§2§0Found!");
         }
+
+        if (core.getPlugin().getServer().getPluginManager().getPlugin("RedisEconomy") == null) {
+            Bukkit.getConsoleSender().sendMessage("§x§f§f§a§c§2§f[XSCASINO REDIS] RedisEconomy : §x§2§F§C§0§2§0Not Found!");
+        } else {
+            redisEconomyAPI = RedisEconomyAPI.getAPI();
+            if(redisEconomyAPI==null){
+                Bukkit.getConsoleSender().sendMessage("§x§f§f§a§c§2§f[XSCASINO REDIS] RedisEconomy : §x§2§F§C§0§2§0Not Found!");
+            } else {
+                Bukkit.getConsoleSender().sendMessage("§x§f§f§a§c§2§f[XSCASINO REDIS] RedisEconomy : §x§2§F§C§0§2§0Found!");
+            }
+        }
     }
 
     public static Economy getEconomy() {
@@ -92,8 +111,8 @@ public class XSHandlers {
 
     public static void saveData() {
        // config.customConfig.set("config.prizeMillis", timerMillis);
-        config.customConfig.set("config.lockPrize", xsLottery.getLockPrize());
-        config.customConfig.set("config.lockPrizeSetter", xsLottery.getSetterLockPrize());
+       // config.customConfig.set("config.lockPrize", xsLottery.getLockPrize());
+       // config.customConfig.set("config.lockPrizeSetter", xsLottery.getSetterLockPrize());
         //config.save();
         //config.reload();
 
@@ -111,13 +130,13 @@ public class XSHandlers {
 
                 LocalTime targetTime = LocalTime.of(Integer.parseInt(time.split(":")[0]), Integer.parseInt(time.split(":")[1]));
 
-                Bukkit.broadcastMessage("NextPrize:" + convertTime(Math.abs(System.currentTimeMillis() - getXsLottery().getNextPrizeTime())));
+                //Bukkit.broadcastMessage("NextPrize:" + convertTime(Math.abs(System.currentTimeMillis() - getXsLottery().getNextPrizeTime())));
 
                 if (currentTime.isAfter(targetTime) && System.currentTimeMillis() - getXsLottery().getNextPrizeTime() >= 0L) {
                     //Bukkit.broadcastMessage("SEND NOW! " + timer + " " + currentTime + "<<");
                     getXsLottery().setNextPrizeTime(System.currentTimeMillis() + calculateTimeRedis(getXsLottery().getPrizeString()));
-                    Bukkit.broadcastMessage("[TEST] CurrentTime" + System.currentTimeMillis());
-                    Bukkit.broadcastMessage("[TEST] NextPrizeTime" + getXsLottery().getNextPrizeTime());
+                  //  Bukkit.broadcastMessage("[TEST] CurrentTime" + System.currentTimeMillis());
+                   // Bukkit.broadcastMessage("[TEST] NextPrizeTime" + getXsLottery().getNextPrizeTime());
                     getXsLottery().xsLotteryEndEvent();
                 }
             }
@@ -132,20 +151,20 @@ public class XSHandlers {
         Duration duration;
         if (currentTime.isAfter(targetTime)) {
             duration = Duration.between(targetTime, currentTime);
-            Bukkit.broadcastMessage("CURRENT : " +currentTime.getHour() + ":" +currentTime.getMinute());
-            Bukkit.broadcastMessage("TARGET : " +targetTime.getHour()+":"+targetTime.getMinute());
-            Bukkit.broadcastMessage("DIFF : " + duration.toMinutes()%60);
-            Bukkit.broadcastMessage("------------------------------------");
+           // Bukkit.broadcastMessage("CURRENT : " +currentTime.getHour() + ":" +currentTime.getMinute());
+           // Bukkit.broadcastMessage("TARGET : " +targetTime.getHour()+":"+targetTime.getMinute());
+           // Bukkit.broadcastMessage("DIFF : " + duration.toMinutes()%60);
+           // Bukkit.broadcastMessage("------------------------------------");
             targetTime = LocalTime.of((int) (23-duration.toHours()), (int) (59-(duration.toMinutes()%60)),59);
             //Bukkit.broadcastMessage("TIME: " + (23-duration.toHours() + " : " + (60-(duration.toMinutes()%60))));
             currentTime =LocalTime.of(0, 0);
         }
         duration = Duration.between(currentTime, targetTime);
-        Bukkit.broadcastMessage("CURRENT2 : " +currentTime.getHour() + ":" +currentTime.getMinute());
-        Bukkit.broadcastMessage("TARGET2 : " +targetTime.getHour()+":"+targetTime.getMinute());
-        Bukkit.broadcastMessage("DIFF2 : " + duration.toMinutes()%60);
-        Bukkit.broadcastMessage("Duration: " + Math.abs(duration.toMillis()));
-        Bukkit.broadcastMessage("------------------------------------");
+       // Bukkit.broadcastMessage("CURRENT2 : " +currentTime.getHour() + ":" +currentTime.getMinute());
+       // Bukkit.broadcastMessage("TARGET2 : " +targetTime.getHour()+":"+targetTime.getMinute());
+       // Bukkit.broadcastMessage("DIFF2 : " + duration.toMinutes()%60);
+       // Bukkit.broadcastMessage("Duration: " + Math.abs(duration.toMillis()));
+       // Bukkit.broadcastMessage("------------------------------------");
 
         return Math.abs(duration.toMillis());
 

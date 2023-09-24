@@ -101,5 +101,11 @@
             <version>1.7</version>
             <scope>provided</scope>
         </dependency>
+        <dependency>
+            <groupId>com.github.Emibergo02</groupId>
+            <artifactId>RedisEconomy</artifactId>
+            <version>57afc6861f</version>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
 </project>

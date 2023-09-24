@@ -17,8 +17,6 @@ config:
   prizeTime: "20:00" #real time
   potPrize: 10000
   potExtra: 750
-  lockPrize: -1
-  lockPrizeSetter: ""
 
 cross-server:
   servers:
