@@ -92,7 +92,7 @@ public final class core extends JavaPlugin {
                         if (Thread.currentThread().isInterrupted()) {
                             return;
                         }
-                        Bukkit.getConsoleSender().sendMessage("Received data (send from serverRedis)" + channel + " -->" + message);
+                       // Bukkit.getConsoleSender().sendMessage("Received data (send from serverRedis)" + channel + " -->" + message);
                         for(String server : config.customConfig.getStringList("cross-server.servers")) {
                             if(channel.equalsIgnoreCase("XSCasinoRedisData/XSLottery/" + config.customConfig.getString("redis.host-server") + "/" + server)) {
                                 convertToObject(message);
@@ -151,9 +151,9 @@ public final class core extends JavaPlugin {
             }
         }
 
-        for(Map.Entry<String,Integer> winner : resultMap.entrySet()) {
-            Bukkit.broadcastMessage(winner.getKey() + " ---> " + winner.getValue());
-        }
+        //for(Map.Entry<String,Integer> winner : resultMap.entrySet()) {
+         //   Bukkit.broadcastMessage(winner.getKey() + " ---> " + winner.getValue());
+        //}
     }
 
     public static void changeConvert(String msg) {
@@ -164,7 +164,7 @@ public final class core extends JavaPlugin {
             String setterName = (msg.split(":")[2]);
             XSHandlers.getXsLottery().setLockPrize(prizeNum);
             XSHandlers.getXsLottery().setSetterLockPrize(setterName);
-            Bukkit.getConsoleSender().sendMessage("Update LockPrize (send from redis server): " + setterName + " with " + prizeNum);
+          //  Bukkit.getConsoleSender().sendMessage("Update LockPrize (send from redis server): " + setterName + " with " + prizeNum);
         }
     }
 
